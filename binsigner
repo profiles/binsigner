@@ -1,0 +1,58 @@
+#!/bin/bash
+if [ "$EUID" -ne 0 ]
+  then echo "Please run as root"
+  exit
+fi
+function help {
+echo "Usage: binpatcher <bin File>"
+}
+if [ $# = 0 ]; then
+    help
+    exit 1
+fi
+if [ $1 = "-h" ]; then
+help
+exit 1
+fi
+if [ $1 = "--help" ]; then
+help
+exit 1
+fi
+if [ ! -f $1 ] && [ ! $1 = "-h" ] &&  [ ! $1 = "--help" ]; then
+echo "[X] Could not find binary with filename $1"
+exit 1
+fi
+binary=$1
+plist="$binary.plist"
+cd "$binary/../"
+echo "[*] Signing binary with entitlements..."
+ldid -e "$binary" > "$plist"
+if [ ! $? -eq 0 ]; then
+    echo "[X] Error extracting entitlements from binary."
+fi
+sed -i '5 i\<true\/>' "$plist"
+sed -i '5 i\<key>platform-application<\/key>' "$plist"
+sed -i '5 i\<true\/>' "$plist"
+sed -i '5 i\<key>com.apple.private.skip-library-validation<\/key>' "$plist"
+sed -i '5 i\<true\/>' "$plist"
+sed -i '5 i\<key>com.apple.private.security.no-container<\/key>' "$plist"
+if [ ! $? -eq 0 ]; then
+    echo "[X] Error adding entitlements to $plist, please check $plist"
+    exit 1
+fi
+function sign {
+if [ -f /usr/share/jailbreak/signcert.p12 ]; then
+     ldid -P -K/usr/share/jailbreak/signcert.p12 -S"$plist" "$binary" > /dev/null 2>&1
+else
+     ldid -S"$plist" "$binary" > /dev/null 2>&1
+fi
+}
+if grep -q "com.apple.private.security.no-container" "$plist"; then
+    sign
+fi
+if [ ! $? -eq 0 ]; then
+    echo "[X] Error, could not sign binary."
+else
+echo "[*] Finished signing!"
+rm "$plist" > /dev/null 2>&1
+fi
